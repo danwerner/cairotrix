@@ -14,9 +14,9 @@
 (def TURN-TIME 1000)
 
 (def WORLD-HEIGHT 15) ;blocks
-(def WORLD-WIDTH 8)
+(def WORLD-WIDTH 9)
 (def BLOCK-SIZE 40) ;px
-(def STARTING-POS [(quot WORLD-WIDTH 2) 0])
+(def STARTING-POS [(dec (quot WORLD-WIDTH 2)) 0])
 
 (def WORLD-WIN-HEIGHT (* WORLD-WIDTH BLOCK-SIZE)) ;px
 (def WORLD-WIN-WIDTH (* WORLD-HEIGHT BLOCK-SIZE))
@@ -32,10 +32,9 @@
    :green [0.0 1.0 0.0]
    :blue  [0.0 0.0 1.0]})
 
-;;; Util
+(def TETRACOLORS (dissoc COLORS :black))
 
-(defn random-color []
-  (rand-nth (keys COLORS)))
+;;; Util
 
 (defn set-source-rgb [cr [r g b]]
   (.setSource cr r g b))
@@ -86,7 +85,7 @@
 
 (defn random-tetra []
   {:form (rand-nth (keys TETRAS))
-   :color (random-color)})
+   :color (rand-nth (keys TETRACOLORS))})
 
 (defn make-game []
   {:turn 0
@@ -138,6 +137,7 @@
         rel-coords  (TETRAS form)
         blocks      (for [[x y] rel-coords]
                       {:x (+ x tx), :y (+ y ty), :color color})]
+    (debug blocks)
     (draw-blocks cr blocks)))
   
 
@@ -145,7 +145,6 @@
   (let [target  (.getWindow worldarea)
         cr      (Context. target)
         {:keys [blocks current position]} game]
-    (debug "draw-all")
     (doto cr
       (draw-bg)
       (draw-blocks blocks)
@@ -173,7 +172,6 @@
         (reset! game-ref game)
         (redraw-all worldarea)
 
-        (debug game)
         (Thread/sleep wait-time)
         (if @RUNNING
           (recur game))))))
@@ -182,7 +180,7 @@
   (let [win        (Window.)
         box        (VBox. false 1)
         worldarea  (DrawingArea.)
-        game-ref   (atom (make-game))]
+        game-ref   (atom (drop-new-tetra (make-game)))]
     (.connect win
       (proxy [Window$DeleteEvent] []
         (onDeleteEvent [source event]
@@ -192,7 +190,6 @@
     (.connect worldarea
       (proxy [Widget$ExposeEvent] []
         (onExposeEvent [source event]
-          (debug "ExposeEvent")
           (draw-all source @game-ref)
           true)))
     (doto box

@@ -179,7 +179,8 @@
       (draw-tetra current position))))
 
 (defn redraw-all [^DrawingArea worldarea]
-  (.queueDrawArea worldarea 0 0 WORLD-WIN-WIDTH WORLD-WIN-HEIGHT))
+  (let [window (.getWindow worldarea)]
+    (.queueDrawArea worldarea 0 0 (.getWidth window) (.getHeight window))))
 
 
 ;;; Main

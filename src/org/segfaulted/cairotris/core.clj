@@ -18,6 +18,9 @@
 (def BLOCK-SIZE 40) ;px
 (def STARTING-POS [(quot WORLD-WIDTH 2) 0])
 
+(def WORLD-WIN-HEIGHT (* WORLD-WIDTH BLOCK-SIZE)) ;px
+(def WORLD-WIN-WIDTH (* WORLD-HEIGHT BLOCK-SIZE))
+
 (def BACKGROUND-COLOR [0.0 0.0 0.0])
 
 (def RUNNING (atom true))
@@ -138,8 +141,8 @@
     (draw-blocks cr blocks)))
   
 
-(defn draw-all [^DrawingArea widget game]
-  (let [target  (.getWindow widget)
+(defn draw-all [^DrawingArea worldarea game]
+  (let [target  (.getWindow worldarea)
         cr      (Context. target)
         {:keys [blocks current position]} game]
     (debug "draw-all")
@@ -147,6 +150,9 @@
       (draw-bg)
       (draw-blocks blocks)
       (draw-tetra current position))))
+
+(defn redraw-all [^DrawingArea worldarea]
+  (.queueDrawArea worldarea 0 0 WORLD-WIN-WIDTH WORLD-WIN-HEIGHT))
 
 
 ;;; Main
@@ -160,14 +166,12 @@
             game       (assoc game :turn turn)
             ;; TODO: check for input
             game       (if new-turn? (step-turn game) game)
-            _          (draw-all worldarea game)
             turn-time  (- (current-millis) turn-start)
             wait-time  (max 0 (- MIN-MILLIS-PER-FRAME turn-time))]
 
-        ;; Update atom so expose events are able to render the current state of the
-        ;; world. A wasteful way of using atoms, though, since there is no concurrent
-        ;; modification to beware of.
-        ;(reset! game-ref game)
+        ;; Expose events render the current state of the world.
+        (reset! game-ref game)
+        (redraw-all worldarea)
 
         (debug game)
         (Thread/sleep wait-time)
@@ -196,8 +200,7 @@
     (doto win
       (.add box)
       (.setTitle "Cairotris")
-      (.setDefaultSize (* WORLD-WIDTH BLOCK-SIZE)
-                       (* WORLD-HEIGHT BLOCK-SIZE))
+      (.setDefaultSize WORLD-WIN-HEIGHT WORLD-WIN-WIDTH)
       (.showAll))
     (future (Gtk/main))
     (game-loop worldarea game-ref)

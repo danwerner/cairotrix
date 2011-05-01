@@ -1,7 +1,8 @@
 (ns org.segfaulted.cairotris.core
   "Cairotris - a Pajitnovian falling blocks game built on top of Clojure, GTK+ and Cairo"
   (:gen-class :name org.segfaulted.cairotris.core :main true )
-  (:require [clojure.string :as str])
+  (:require [clojure.set :as set]
+            [clojure.string :as str])
   (:import [org.gnome.gtk Gtk Window Window$DeleteEvent VBox DrawingArea 
                           Widget$ExposeEvent]
            [org.gnome.gdk Event EventExpose]
@@ -57,9 +58,10 @@
 (defn current-millis []
   (System/currentTimeMillis))
 
-(defn debug [msg & args]
-  (assert (or (instance? String msg) (not args)))
-  (println (apply format (str msg) args)))
+(defn debug [obj & args]
+  (assert (or (instance? String obj) (not args)))
+  (println (apply format (str obj) args))
+  obj)
 
 ;;; Game Logic
 
@@ -94,19 +96,51 @@
    :next (random-tetra)
    :position nil})
 
-(defn drop-new-tetra [game]
+(defn abs-tetra-block-coords [tetra position]
+  (let [rel-coords (-> tetra :form TETRAS)
+        [tx ty]    position]
+    (for [[x y] rel-coords]
+      [(+ x tx) (+ y ty)])))
+
+(defn tetra->blocks [tetra position]
+  (let [color (:color tetra)
+        abs-coords (abs-tetra-block-coords tetra position)]
+    (for [[x y] abs-coords]
+      {:x x, :y y, :color color})))
+
+(defn next-position [position]
+  (let [[x y] position]
+    [x (inc y)]))
+
+(defn coords-overlap? [coords1 coords2]
+  (debug (set coords1))
+  (debug (set coords2))
+  (set/intersection (set coords1) (set coords2)))
+
+(defn anchor-current-tetra [game]
+  (let [{:keys [blocks current position]} game]
+    (assoc game :blocks (set/union blocks (tetra->blocks current position)))))
+
+(defn drop-next-tetra [game]
   (assoc game
     :current (:next game)
     :next (random-tetra)
     :position STARTING-POS))
 
-(defn step-turn [game]
-  ;; move tetra down:
-  ;; calculate new positions of current tetra blocks
-  ;; no collision => move them down
-  ;; if collision would have occured, affix blocks and generate new tetra
-  ;; play sound here? or in the game loop => separation of concerns?
-  game)
+(defn next-game-turn [game]
+  (let [{:keys [blocks current position]} game
+        world-block-coords     (map (juxt :x :y) blocks)
+        old-tetra-block-coords (abs-tetra-block-coords current position)
+        new-position           (next-position position)
+        new-tetra-block-coords (abs-tetra-block-coords current new-position)
+        ;; TODO: or tetra hits bottom
+        collision?             (coords-overlap? new-tetra-block-coords
+                                              world-block-coords)]
+    (if (seq collision?)
+      ;; TODO: play sound here? or in the game loop => separation of concerns?
+      (-> game anchor-current-tetra drop-next-tetra)
+      (assoc game :position new-position))))
+
 
 ;;; Drawing
 
@@ -130,15 +164,9 @@
     (draw-block cr block)))
 
 (defn draw-tetra [cr tetra position]
-  (let [{:keys [form color]}  tetra
-        [tx ty]     position
-        ;; Turning the current tetra into blocks with absolute world
-        ;; coordinates allows us to use draw-blocks unchanged.
-        rel-coords  (TETRAS form)
-        blocks      (for [[x y] rel-coords]
-                      {:x (+ x tx), :y (+ y ty), :color color})]
-    (debug blocks)
-    (draw-blocks cr blocks)))
+    ;; Turning the current tetra into blocks with absolute world
+    ;; coordinates allows us to use draw-blocks unchanged.
+    (draw-blocks cr (tetra->blocks tetra position)))
   
 
 (defn draw-all [^DrawingArea worldarea game]
@@ -164,7 +192,7 @@
             new-turn?  (< (:turn game) turn)
             game       (assoc game :turn turn)
             ;; TODO: check for input
-            game       (if new-turn? (step-turn game) game)
+            game       (if new-turn? (next-game-turn game) game)
             turn-time  (- (current-millis) turn-start)
             wait-time  (max 0 (- MIN-MILLIS-PER-FRAME turn-time))]
 
@@ -180,7 +208,7 @@
   (let [win        (Window.)
         box        (VBox. false 1)
         worldarea  (DrawingArea.)
-        game-ref   (atom (drop-new-tetra (make-game)))]
+        game-ref   (atom (drop-next-tetra (make-game)))]
     (.connect win
       (proxy [Window$DeleteEvent] []
         (onDeleteEvent [source event]

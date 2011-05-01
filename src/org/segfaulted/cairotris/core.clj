@@ -117,6 +117,10 @@
   (debug (set coords2))
   (set/intersection (set coords1) (set coords2)))
 
+(defn tetra-hits-bottom? [tetra-block-coords]
+  (some (fn [[_ y]] (>= y WORLD-HEIGHT)) tetra-block-coords))
+
+
 (defn anchor-current-tetra [game]
   (let [{:keys [blocks current position]} game]
     (assoc game :blocks (set/union blocks (tetra->blocks current position)))))
@@ -133,10 +137,10 @@
         old-tetra-block-coords (abs-tetra-block-coords current position)
         new-position           (next-position position)
         new-tetra-block-coords (abs-tetra-block-coords current new-position)
-        ;; TODO: or tetra hits bottom
         collision?             (coords-overlap? new-tetra-block-coords
-                                              world-block-coords)]
-    (if (seq collision?)
+                                              world-block-coords)
+        hits-bottom?           (tetra-hits-bottom? new-tetra-block-coords)]
+    (if (or (seq collision?) hits-bottom?)
       ;; TODO: play sound here? or in the game loop => separation of concerns?
       (-> game anchor-current-tetra drop-next-tetra)
       (assoc game :position new-position))))

@@ -199,7 +199,7 @@
       (.setDefaultSize (* WORLD-WIDTH BLOCK-SIZE)
                        (* WORLD-HEIGHT BLOCK-SIZE))
       (.showAll))
-    (future (game-loop worldarea game-ref))
-    (Gtk/main)
+    (future (Gtk/main))
+    (game-loop worldarea game-ref)
     ;; I don't use agents, so why is this necessary?
     (shutdown-agents)))

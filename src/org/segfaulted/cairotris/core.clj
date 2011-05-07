@@ -222,13 +222,13 @@
         worldarea  (DrawingArea.)
         game-ref   (atom (drop-next-tetra (make-game)))]
     (.connect win
-      (proxy [Window$DeleteEvent] []
-        (onDeleteEvent [source event]
+      (reify Window$DeleteEvent
+        (onDeleteEvent [_ source event]
           (reset! RUNNING false)
           (Gtk/mainQuit)
           false)))
     (.connect worldarea
-      (proxy [Widget$ExposeEvent] []
+      (reify Widget$ExposeEvent
         (onExposeEvent [source event]
           (draw-all source @game-ref)
           true)))

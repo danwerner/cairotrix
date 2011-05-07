@@ -3,9 +3,10 @@
   (:gen-class :name org.segfaulted.cairotris.core :main true )
   (:require [clojure.set :as set]
             [clojure.string :as str])
-  (:import [org.gnome.gtk Gtk Window Window$DeleteEvent VBox DrawingArea 
-                          Widget$ExposeEvent]
-           [org.gnome.gdk Event EventExpose]
+  (:import [org.gnome.gtk DrawingArea Gtk VBox Widget$ExposeEvent
+                          Widget$KeyPressEvent Widget$KeyReleaseEvent
+                          Window Window$DeleteEvent ]
+           [org.gnome.gdk Event EventExpose Keyval]
            [org.freedesktop.cairo Context]))
 
 (defonce gtk-init (Gtk/init (make-array String 0)))
@@ -24,7 +25,8 @@
 
 (def BACKGROUND-COLOR [0.0 0.0 0.0])
 
-(def RUNNING (atom true))
+(def *running* (atom true))
+(def *keys* (atom #{}))
 
 (def COLORS
   {:black [0.0 0.0 0.0]
@@ -120,8 +122,6 @@
     [x (inc y)]))
 
 (defn coords-overlap? [coords1 coords2]
-  (debug (set coords1))
-  (debug (set coords2))
   (set/intersection (set coords1) (set coords2)))
 
 (defn tetra-hits-bottom? [tetra-block-coords]
@@ -213,7 +213,7 @@
         (redraw-all worldarea)
 
         (Thread/sleep wait-time)
-        (if @RUNNING
+        (if @*running*
           (recur game))))))
 
 (defn -main []
@@ -224,14 +224,24 @@
     (.connect win
       (reify Window$DeleteEvent
         (onDeleteEvent [_ source event]
-          (reset! RUNNING false)
+          (reset! *running* false)
           (Gtk/mainQuit)
+          false)))
+    (.connect win
+      (reify Widget$KeyPressEvent
+        (onKeyPressEvent [_ source event]
+          (swap! *keys* conj (.getKeyval event))
+          false)))
+    (.connect win
+      (reify Widget$KeyReleaseEvent
+        (onKeyReleaseEvent [_ source event]
+          (swap! *keys* disj (.getKeyval event))
           false)))
     (.connect worldarea
       (reify Widget$ExposeEvent
-        (onExposeEvent [source event]
+        (onExposeEvent [_ source event]
           (draw-all source @game-ref)
-          true)))
+          false)))
     (doto box
       (.add worldarea))
     (doto win
@@ -239,7 +249,7 @@
       (.setTitle "Cairotris")
       (.setDefaultSize WORLD-WIN-HEIGHT WORLD-WIN-WIDTH)
       (.showAll))
-    (future (Gtk/main))
-    (game-loop worldarea game-ref)
+    (future (game-loop worldarea game-ref))
+    (Gtk/main)
     ;; I don't use agents, so why is this necessary?
     (shutdown-agents)))

@@ -75,12 +75,19 @@
     (set (keep identity parsed))))
   
 (def TETRAS-RAW {
-  :O "XX__
-      XX__
-      ____"
-  :T "_X__
-      XXX_
-      ____"
+  :I "XXXX"
+  :J "X__
+      XXX"
+  :L "__X
+      XXX"
+  :O "XX
+      XX"
+  :S "_XX
+      XX_"
+  :T "_X_
+      XXX"
+  :Z "XX_
+      _XX"
 })
 
 (def TETRAS (map-values parse-tetra TETRAS-RAW))

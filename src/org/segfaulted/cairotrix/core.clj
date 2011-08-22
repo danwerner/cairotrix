@@ -26,7 +26,7 @@
 (def BACKGROUND-COLOR [0.0 0.0 0.0])
 
 (def *running* (atom true))
-(def *keys* (atom #{}))
+(def *keyset* (atom #{}))
 
 (def COLORS
   {:black [0.0 0.0 0.0]
@@ -152,6 +152,18 @@
       (-> game anchor-current-tetra drop-next-tetra)
       (assoc game :position new-position))))
 
+(defn movement-from-keys
+
+(defn handle-input [game keyset]
+  (let [{:keys [blocks current position]} game
+        world-block-coords     (map (juxt :x :y) blocks)
+        old-tetra-block-coords (abs-tetra-block-coords current position)
+        ;; TODO: And rotation
+        new-position           (move-tetra position (movement-from-keys keyset))
+        new-tetra-block-coords (abs-tetra-block-coords current new-position)
+        collision?             (coords-overlap? new-tetra-block-coords
+                                              world-block-coords)
+
 
 ;;; Drawing
 
@@ -211,6 +223,7 @@
         ;; Expose events render the current state of the world.
         (reset! game-ref game)
         (redraw-all worldarea)
+        (debug @*keyset*)
 
         (Thread/sleep wait-time)
         (if @*running*
@@ -230,12 +243,12 @@
     (.connect win
       (reify Widget$KeyPressEvent
         (onKeyPressEvent [_ source event]
-          (swap! *keys* conj (.getKeyval event))
+          (swap! *keyset* conj (.getKeyval event))
           false)))
     (.connect win
       (reify Widget$KeyReleaseEvent
         (onKeyReleaseEvent [_ source event]
-          (swap! *keys* disj (.getKeyval event))
+          (swap! *keyset* disj (.getKeyval event))
           false)))
     (.connect worldarea
       (reify Widget$ExposeEvent

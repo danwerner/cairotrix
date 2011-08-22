@@ -1,5 +1,5 @@
-(ns org.segfaulted.cairotris.test.core
-  (:use [cairotris.core])
+(ns org.segfaulted.cairotrix.test.core
+  (:use [cairotrix.core])
   (:use [clojure.test]))
 
 (deftest replace-me ;; FIXME: write

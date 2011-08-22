@@ -1,6 +1,6 @@
-(ns org.segfaulted.cairotris.core
-  "Cairotris - a Pajitnovian falling blocks game built on top of Clojure, GTK+ and Cairo"
-  (:gen-class :name org.segfaulted.cairotris.core :main true )
+(ns org.segfaulted.cairotrix.core
+  "Cairotrix - a Pajitnovian falling blocks game built on top of Clojure, GTK+ and Cairo"
+  (:gen-class :name org.segfaulted.cairotrix.core :main true )
   (:require [clojure.set :as set]
             [clojure.string :as str])
   (:import [org.gnome.gtk DrawingArea Gtk VBox Widget$ExposeEvent
@@ -246,7 +246,7 @@
       (.add worldarea))
     (doto win
       (.add box)
-      (.setTitle "Cairotris")
+      (.setTitle "Cairotrix")
       (.setDefaultSize WORLD-WIN-HEIGHT WORLD-WIN-WIDTH)
       (.showAll))
     (future (game-loop worldarea game-ref))

@@ -3,10 +3,10 @@
   (:gen-class :name org.segfaulted.cairotrix.core :main true )
   (:require [clojure.set :as set]
             [clojure.string :as str])
-  (:import [org.gnome.gtk DrawingArea Gtk VBox Widget$ExposeEvent
+  (:import [org.gnome.gtk DrawingArea Gtk VBox Widget$Draw
                           Widget$KeyPressEvent Widget$KeyReleaseEvent
                           Window Window$DeleteEvent ]
-           [org.gnome.gdk Event EventExpose Keyval]
+           [org.gnome.gdk Keyval]
            [org.freedesktop.cairo Context]))
 
 (defonce gtk-init (Gtk/init (make-array String 0)))
@@ -178,12 +178,10 @@
     ;; Turning the current tetra into blocks with absolute world
     ;; coordinates allows us to use draw-blocks unchanged.
     (draw-blocks cr (tetra->blocks tetra position)))
-  
 
-(defn draw-all [^DrawingArea worldarea game]
-  (let [target  (.getWindow worldarea)
-        cr      (Context. target)
-        {:keys [blocks current position]} game]
+
+(defn draw-all [^DrawingArea worldarea cr game]
+  (let [{:keys [blocks current position]} game]
     (doto cr
       (draw-bg)
       (draw-blocks blocks)
@@ -208,7 +206,7 @@
             turn-time  (- (current-millis) turn-start)
             wait-time  (max 0 (- MIN-MILLIS-PER-FRAME turn-time))]
 
-        ;; Expose events render the current state of the world.
+        ;; Draw signals render the current state of the world.
         (reset! game-ref game)
         (redraw-all worldarea)
 
@@ -238,9 +236,9 @@
           (swap! *keys* disj (.getKeyval event))
           false)))
     (.connect worldarea
-      (reify Widget$ExposeEvent
-        (onExposeEvent [_ source event]
-          (draw-all source @game-ref)
+      (reify Widget$Draw
+        (onDraw [_ source cr]
+          (draw-all source cr @game-ref)
           false)))
     (doto box
       (.add worldarea))

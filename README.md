@@ -10,13 +10,19 @@ This is an unfinished work-in-progress. It already features falling blocks and c
 
 2. Get [Leiningen](http://github.com/technomancy/leiningen/)
 
-3. Get the dependencies. Leiningen will take care of most of the JARs, but you'll need to install [java-gnome](http://java-gnome.sourceforge.net/get/) separately. On Debian/Ubuntu Linux, I usually do:
+3. Get most of the JAR dependencies using Leiningen:
+
+   ```shell
+   $ cd /path/to/cairotrix
+   $ lein deps
+   ```
+
+4. Get [java-gnome](http://java-gnome.sourceforge.net/get/) (4.1 or higher). On Debian/Ubuntu Linux, I usually do:
 
    ```shell
    $ sudo aptitude install libjava-gnome-java
    $ cd /path/to/cairotrix
-   $ lein deps
-   $ ln -s /usr/share/java/gtk-4.0.jar lib/gtk-4.0.jar
+   $ ln -s /usr/share/java/gtk-4.1.jar lib/gtk-4.1.jar
    ```
 
 ## Usage

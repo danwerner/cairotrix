@@ -26,6 +26,7 @@
 (def BACKGROUND-COLOR [0.0 0.0 0.0])
 
 ;; Variable
+(def RUNNING (atom true))
 (def KEYS (atom #{}))
 
 (def COLORS
@@ -98,12 +99,22 @@
   {:shape (rand-nth (keys TETRAS))
    :color (rand-nth (keys TETRACOLORS))})
 
+(defn drop-next-tetra [game]
+  (assoc game
+    :current (:next game)
+    :next (random-tetra)
+    :position STARTING-POS))
+
 (defn make-game []
-  {:turn 0
-   :blocks #{}
-   :current nil
-   :next (random-tetra)
-   :position nil})
+  (->
+    {:turn 0
+     :state "play"
+     :game-start (current-millis)
+     :blocks #{}
+     :current nil
+     :next (random-tetra)
+     :position nil}
+    (drop-next-tetra)))
 
 (defn abs-tetra-block-coords [tetra position]
   (let [rel-coords (-> tetra :shape TETRAS)
@@ -116,6 +127,9 @@
         abs-coords (abs-tetra-block-coords tetra position)]
     (for [[x y] abs-coords]
       {:x x, :y y, :color color})))
+
+(defn blocks->coords [blocks]
+  (map (juxt :x :y) blocks))
 
 (defn next-position [position direction]
   (let [[x y] position
@@ -137,15 +151,9 @@
     (assoc game :blocks
       (set/union blocks (tetra->blocks current position)))))
 
-(defn drop-next-tetra [game]
-  (assoc game
-    :current (:next game)
-    :next (random-tetra)
-    :position STARTING-POS))
-
 (defn move-current-tetra [game direction]
   (let [{:keys [blocks current position]} game
-        world-block-coords     (map (juxt :x :y) blocks)
+        world-block-coords     (blocks->coords blocks)
         old-tetra-block-coords (abs-tetra-block-coords current position)
         new-position           (next-position position direction)
         new-tetra-block-coords (abs-tetra-block-coords current new-position)
@@ -201,11 +209,14 @@
 
 
 (defn draw-all [^DrawingArea worldarea cr game]
-  (let [{:keys [blocks current position]} game]
+  (let [{:keys [blocks current position state]} game]
     (doto cr
       (draw-bg)
       (draw-blocks blocks)
-      (draw-tetra current position))))
+      (draw-tetra current position))
+    (when (= state "game-over")
+      ;; TODO: Draw "Game Over" text
+      )))
 
 (defn redraw-all [^DrawingArea worldarea]
   (let [window (.getWindow worldarea)]
@@ -214,43 +225,67 @@
 
 ;;; Main
 
-(defn game-loop [^DrawingArea worldarea game-ref]
-  (let [game-start (current-millis)]
-    (loop [game @game-ref]
-      (let [turn-start (current-millis)
-            turn       (quot (- turn-start game-start) TURN-TIME)
+(defn play-state [^DrawingArea worldarea game turn-start]
+      (let [turn       (quot (- turn-start (:game-start game))
+                             TURN-TIME)
             new-turn?  (< (:turn game) turn)
             game       (assoc game :turn turn)
+
+            ;; Directions
             directions (parse-keyboard-directions @KEYS)
             directions (if new-turn?
                          (cons [0 1] directions)
                          directions)
+            ;; Move
             game       (if directions
                          (reduce move-current-tetra game directions)
-                         game)
-            turn-time  (- (current-millis) turn-start)
-            wait-time  (max 0 (- MIN-MILLIS-PER-FRAME turn-time))]
+                         game)]
 
-        ;; Draw signals render the current state of the world.
-        (reset! game-ref game)
-        (redraw-all worldarea)
-        (Thread/sleep wait-time)
+        (let [{:keys [blocks current position]} game
+              tetra-block-coords (abs-tetra-block-coords current position)
+              world-block-coords (blocks->coords blocks)
+              collision? (coords-overlap? tetra-block-coords
+                                          world-block-coords)]
+          (if collision?
+            (assoc game :state "game-over")
+            game))))
 
-        (if (@KEYS Keyval/Escape)
-          (Gtk/mainQuit)
 
-        (recur game))))))
+(defn game-loop [^DrawingArea worldarea game-ref]
+  (loop [game @game-ref]
+    (let [state (:state game)
+          turn-start (current-millis)
+          game (case state
+                 ("game-over" "new")
+                   (make-game)
+                 "play"
+                   (play-state worldarea game turn-start))
+          turn-time  (- (current-millis) turn-start)
+          wait-time  (max 0 (- MIN-MILLIS-PER-FRAME turn-time))]
+
+      ;; Draw signals render the current state of the world.
+      (reset! game-ref game)
+      (redraw-all worldarea)
+      (Thread/sleep wait-time)
+
+      (if (@KEYS Keyval/Escape)
+        (reset! RUNNING false))
+
+      (if @RUNNING
+        (recur game)
+        (Gtk/mainQuit)))))
+
 
 (defn -main []
   (let [win        (Window.)
         box        (VBox. false 1)
         worldarea  (DrawingArea.)
-        game-ref   (atom (drop-next-tetra (make-game)))]
+        game-ref   (atom {:state "new"})]
 
     (.connect win
       (reify Window$DeleteEvent
         (onDeleteEvent [_ source event]
-          (Gtk/mainQuit)
+          (reset! RUNNING false)
           false)))
     (.connect win
       (reify Widget$KeyPressEvent

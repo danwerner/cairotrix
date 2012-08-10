@@ -25,8 +25,8 @@
 
 (def BACKGROUND-COLOR [0.0 0.0 0.0])
 
-(def *running* (atom true))
-(def *keys* (atom #{}))
+;; Variable
+(def KEYS (atom #{}))
 
 (def COLORS
   {:black [0.0 0.0 0.0]
@@ -75,7 +75,7 @@
                    \X [x y]
                    \_ nil))]
     (set (keep identity parsed))))
-  
+
 (def TETRAS-RAW {
   :I "XXXX"
   :J "X__
@@ -95,7 +95,7 @@
 (def TETRAS (map-values parse-tetra TETRAS-RAW))
 
 (defn random-tetra []
-  {:form (rand-nth (keys TETRAS))
+  {:shape (rand-nth (keys TETRAS))
    :color (rand-nth (keys TETRACOLORS))})
 
 (defn make-game []
@@ -106,7 +106,7 @@
    :position nil})
 
 (defn abs-tetra-block-coords [tetra position]
-  (let [rel-coords (-> tetra :form TETRAS)
+  (let [rel-coords (-> tetra :shape TETRAS)
         [tx ty]    position]
     (for [[x y] rel-coords]
       [(+ x tx) (+ y ty)])))
@@ -117,20 +117,25 @@
     (for [[x y] abs-coords]
       {:x x, :y y, :color color})))
 
-(defn next-position [position]
-  (let [[x y] position]
-    [x (inc y)]))
+(defn next-position [position direction]
+  (let [[x y] position
+        [dx dy] direction]
+    [(+ x dx) (+ y dy)]))
 
 (defn coords-overlap? [coords1 coords2]
-  (set/intersection (set coords1) (set coords2)))
+  (seq (set/intersection (set coords1) (set coords2))))
 
-(defn tetra-hits-bottom? [tetra-block-coords]
-  (some (fn [[_ y]] (>= y WORLD-HEIGHT)) tetra-block-coords))
+(defn tetra-hits-border? [tetra-block-coords]
+  (some (fn [[x y]]
+          (not (and (< y WORLD-HEIGHT)
+                    (<= 0 x (dec WORLD-WIDTH)))))
+        tetra-block-coords))
 
 
 (defn anchor-current-tetra [game]
   (let [{:keys [blocks current position]} game]
-    (assoc game :blocks (set/union blocks (tetra->blocks current position)))))
+    (assoc game :blocks
+      (set/union blocks (tetra->blocks current position)))))
 
 (defn drop-next-tetra [game]
   (assoc game
@@ -138,19 +143,34 @@
     :next (random-tetra)
     :position STARTING-POS))
 
-(defn next-game-turn [game]
+(defn move-current-tetra [game direction]
   (let [{:keys [blocks current position]} game
         world-block-coords     (map (juxt :x :y) blocks)
         old-tetra-block-coords (abs-tetra-block-coords current position)
-        new-position           (next-position position)
+        new-position           (next-position position direction)
         new-tetra-block-coords (abs-tetra-block-coords current new-position)
         collision?             (coords-overlap? new-tetra-block-coords
-                                              world-block-coords)
-        hits-bottom?           (tetra-hits-bottom? new-tetra-block-coords)]
-    (if (or (seq collision?) hits-bottom?)
-      ;; TODO: play sound here? or in the game loop => separation of concerns?
-      (-> game anchor-current-tetra drop-next-tetra)
+                                                world-block-coords)
+        hits-border?           (tetra-hits-border? new-tetra-block-coords)]
+    (if (or collision? hits-border?)
+      (if (= direction [0 1])
+        ;; Tetra has hit something on its way down
+        (-> game anchor-current-tetra drop-next-tetra)
+        ;; Tetra has hit something left/right, don't move
+        game)
+      ;; Path is clear, move the tetra
       (assoc game :position new-position))))
+
+
+;;; Keyboard Input
+
+(def KEY-DIRECTIONS
+  {Keyval/Down  [0  1]
+   Keyval/Left  [-1 0]
+   Keyval/Right [ 1 0]})
+
+(defn parse-keyboard-directions [keys]
+  (filter identity (map KEY-DIRECTIONS keys)))
 
 
 ;;; Drawing
@@ -201,39 +221,46 @@
             turn       (quot (- turn-start game-start) TURN-TIME)
             new-turn?  (< (:turn game) turn)
             game       (assoc game :turn turn)
-            ;; TODO: check for input
-            game       (if new-turn? (next-game-turn game) game)
+            directions (parse-keyboard-directions @KEYS)
+            directions (if new-turn?
+                         (cons [0 1] directions)
+                         directions)
+            game       (if directions
+                         (reduce move-current-tetra game directions)
+                         game)
             turn-time  (- (current-millis) turn-start)
             wait-time  (max 0 (- MIN-MILLIS-PER-FRAME turn-time))]
 
         ;; Draw signals render the current state of the world.
         (reset! game-ref game)
         (redraw-all worldarea)
-
         (Thread/sleep wait-time)
-        (if @*running*
-          (recur game))))))
+
+        (if (@KEYS Keyval/Escape)
+          (Gtk/mainQuit)
+
+        (recur game))))))
 
 (defn -main []
   (let [win        (Window.)
         box        (VBox. false 1)
         worldarea  (DrawingArea.)
         game-ref   (atom (drop-next-tetra (make-game)))]
+
     (.connect win
       (reify Window$DeleteEvent
         (onDeleteEvent [_ source event]
-          (reset! *running* false)
           (Gtk/mainQuit)
           false)))
     (.connect win
       (reify Widget$KeyPressEvent
         (onKeyPressEvent [_ source event]
-          (swap! *keys* conj (.getKeyval event))
+          (swap! KEYS conj (.getKeyval event))
           false)))
     (.connect win
       (reify Widget$KeyReleaseEvent
         (onKeyReleaseEvent [_ source event]
-          (swap! *keys* disj (.getKeyval event))
+          (swap! KEYS disj (.getKeyval event))
           false)))
     (.connect worldarea
       (reify Widget$Draw
@@ -247,7 +274,10 @@
       (.setTitle "Cairotrix")
       (.setDefaultSize WORLD-WIN-HEIGHT WORLD-WIN-WIDTH)
       (.showAll))
-    (future (game-loop worldarea game-ref))
-    (Gtk/main)
+
+    (future (Gtk/main))
+    (game-loop worldarea game-ref)
+
     ;; I don't use agents, so why is this necessary?
-    (shutdown-agents)))
+    (shutdown-agents)
+    (println "Quit.")))

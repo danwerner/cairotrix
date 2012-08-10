@@ -35,6 +35,6 @@ I've put this project on hold in favour of working on other things. If you'd lik
 
 ## License
 
-Copyright (C) 2011  Daniel Werner
+Copyright (C) 2011-2012  Daniel Werner
 
 Distributed under the Eclipse Public License, the same as Clojure.
